@@ -1,0 +1,4 @@
+<launch>
+	<node pkg='rviz' name='rviz' type='rviz' args='-d $(find lr1)/config.rviz' />
+	<node pkg='lr1' type='laser_scan.py' name='laser_scan' output='screen' />
+</launch>

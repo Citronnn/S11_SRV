@@ -1,0 +1,4 @@
+<launch>
+	<node pkg='rviz' name='rviz' type='rviz' args='-d $(find lr1)/config.rviz' />
+	<node pkg='lr1' type='occupancy_grid.py' name='occupancy_grid' output='screen' />
+</launch>
