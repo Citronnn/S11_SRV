@@ -9,6 +9,10 @@ pub_old = rospy.Publisher('/laser_scan_old', LaserScan, queue_size = 10)
 pub_new = rospy.Publisher('/laser_scan_new', LaserScan, queue_size = 10)
 pub_grid = rospy.Publisher('/occupancy_grid', OccupancyGrid, queue_size = 10)
 
+
+dimension = 10
+resolution = 0.1
+
 def callback(msg):
     pub_old.publish(msg)
     filtered_data = find_anomalies(msg.ranges, msg.angle_min, msg.angle_increment)
@@ -17,33 +21,31 @@ def callback(msg):
     get_map(filtered_data[1])
 
 def get_map(data):
-    dimension = 10
-    resolution = 0.1
-    og_msg = get_occurancy_grid_msg(dimension, resolution)
+    og_msg = get_occurancy_grid_msg()
     for point in data:
-        if check_borders(point, dimension):
-            new_x = transform_coords(point[0], dimension)
-            new_y = transform_coords(point[1], dimension)
-            og_msg.data = fill_data(og_msg.data, new_x, new_y, dimension, resolution, 100)
-    og_msg.data = remove_unknown(og_msg.data, dimension, resolution, 4, 5, -1, 1)
-    og_msg.data = remove_unknown(og_msg.data, dimension, resolution, 5, 5, 1, 1)
-    og_msg.data = remove_unknown(og_msg.data, dimension, resolution, 4, 4, -1, -1)
-    og_msg.data = remove_unknown(og_msg.data, dimension, resolution, 5, 4, 1, -1)
+        if check_borders(point):
+            new_x = transform_coords(point[0])
+            new_y = transform_coords(point[1])
+            og_msg.data = fill_data(og_msg.data, new_x, new_y, 100)
+    og_msg.data = remove_unknown(og_msg.data, dimension / 2 - 1, dimension / 2, -1, 1)
+    og_msg.data = remove_unknown(og_msg.data, dimension / 2,  dimension / 2, 1, 1)
+    og_msg.data = remove_unknown(og_msg.data, dimension / 2 - 1, dimension / 2 - 1, -1, -1)
+    og_msg.data = remove_unknown(og_msg.data, dimension / 2, dimension /2 - 1, 1, -1)
     pub_grid.publish(og_msg)
 
-def check_borders(point, border):
-    return abs(point[0]) < (border / 2) and abs(point[1]) < (border / 2)
+def check_borders(point):
+    return abs(point[0]) < (dimension / 2) and abs(point[1]) < (dimension / 2)
 
-def transform_coords(coord, dimension):
+def transform_coords(coord):
     return coord + dimension / 2
 
-def fill_data(data, x, y, dimension, resolution, value):
+def fill_data(data, x, y, value):
     for i in range(int(1 / resolution)):
         for j in range(int(1 / resolution)):
-            data[get_position_by_coords(x, y, dimension, resolution, i, j)] = value
+            data[get_position_by_coords(x, y, i, j)] = value
     return data
 
-def get_occurancy_grid_msg(dimension, resolution):
+def get_occurancy_grid_msg():
     og_msg = OccupancyGrid()
     width = int(dimension / resolution)
     height = int(dimension / resolution)
@@ -56,24 +58,24 @@ def get_occurancy_grid_msg(dimension, resolution):
     og_msg.data = [0] * (width * height)
     return og_msg
 
-def remove_unknown(data, dimension, resolution, start_x, start_y, direction_x, direction_y):
+def remove_unknown(data, start_x, start_y, direction_x, direction_y):
     for i in range(int(dimension / 2) - 1):
         for j in range(int(dimension / 2) - 1):
-            current_value = data[get_position_by_coords(start_x + i * direction_x, start_y + j * direction_y, dimension, resolution, 0, 0)]
+            current_value = data[get_position_by_coords(start_x + i * direction_x, start_y + j * direction_y, 0, 0)]
             if current_value != 0:
-                first_neighbour = data[get_position_by_coords(start_x + (i + 1) * direction_x, start_y + j * direction_y, dimension, resolution, 0, 0)]
+                first_neighbour = data[get_position_by_coords(start_x + (i + 1) * direction_x, start_y + j * direction_y, 0, 0)]
                 if first_neighbour == 0 and j <= i:
-                    data = fill_data(data, start_x + (i + 1) * direction_x, start_y + j * direction_y, dimension, resolution, -1)
-                second_neighbour = data[get_position_by_coords(start_x + i * direction_x, start_y + (j + 1) * direction_y, dimension, resolution, 0, 0)]
+                    data = fill_data(data, start_x + (i + 1) * direction_x, start_y + j * direction_y, -1)
+                second_neighbour = data[get_position_by_coords(start_x + i * direction_x, start_y + (j + 1) * direction_y, 0, 0)]
                 if second_neighbour == 0 and i <= j:
-                    data = fill_data(data, start_x + i * direction_x, start_y + (j + 1) * direction_y, dimension, resolution, -1)
-                third_neighbour = data[get_position_by_coords(start_x + (i + 1) * direction_x, start_y + (j + 1) * direction_y, dimension, resolution, 0, 0)]
+                    data = fill_data(data, start_x + i * direction_x, start_y + (j + 1) * direction_y, -1)
+                third_neighbour = data[get_position_by_coords(start_x + (i + 1) * direction_x, start_y + (j + 1) * direction_y, 0, 0)]
                 if third_neighbour == 0:
-                    data = fill_data(data, start_x + (i + 1) * direction_x, start_y + (j + 1) * direction_y, dimension, resolution, -1)
+                    data = fill_data(data, start_x + (i + 1) * direction_x, start_y + (j + 1) * direction_y, -1)
     return data
 
 
-def get_position_by_coords(x, y, dimension, resolution, row_index, col_index):
+def get_position_by_coords(x, y, row_index, col_index):
     return math.floor(y) * int(dimension / (resolution ** 2)) \
         + row_index * int(dimension / resolution) + math.floor(x) * int(1 / resolution) \
         + col_index + 1 * math.floor(y) 
